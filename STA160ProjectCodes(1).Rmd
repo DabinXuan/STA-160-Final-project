@@ -1,0 +1,507 @@
+---
+title: "Mandy_final"
+author: "Mandy Yu"
+date: "2024-11-23"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#load package
+library(psych)
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+library(readxl)
+library(corrplot)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(writexl)
+library(ggplot2)
+library(gridExtra)
+library(lmtest)
+library(car)
+library(MASS)
+library(caret)
+library(forcats)
+```
+
+```{r}
+#load data
+original_data = recs2020_public_v7
+
+#reduced to CA
+data_ca <- original_data %>% filter(state_postal == "CA")
+
+#selected variables
+og_data <- data_ca[, c("HHSEX", "EMPLOYHH", "NHSLDMEM", "NUMCHILD", "NUMADULT1", "NUMADULT2", "MONEYPY", "TYPEHUQ", "TOTROOMS", "SOLAR", "ENERGYASST", "HEATHOME", "BA_climate", "HDD65", "CDD65", "KWH", "YEARMADERANGE", "EDUCATION", "UATYP10")]
+
+colnames(og_data) <- c("gender", "employment", "total_members", "age_17", "age_18to64", "age_65", "income", "housing_unit", "rooms", "solar", "assistance", "heating", "climate", "heating_day", "cooling_day", "total_electricity","year_built", "education", "urbanization")
+
+#change categorical name to factor
+data <- og_data %>%
+  mutate(
+    gender = as.factor(gender),
+    income = as.factor(income),
+    assistance = as.factor(assistance),
+    heating = as.factor(heating),
+    employment = as.factor(employment),
+    year_built = as.factor(year_built),
+    education = as.factor(education),
+    housing_unit = as.factor(housing_unit),
+    solar = as.factor(solar),
+    urbanization = as.factor(urbanization),
+    climate = as.factor(climate)
+  )
+```
+
+```{r}
+data_solar <- og_data[og_data$solar != -2, ]
+psych_solar <- psych::describe(data_solar)
+print(psych_solar)
+
+data_electricity <-data
+psych_electricity <- psych::describe(data_electricity)
+print(psych_electricity)
+```
+
+```{r}
+electricity = ggplot(data, aes(x = total_electricity)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "skyblue", color = "black", alpha = 0.7) +
+  geom_density(color = "red", size = 1) +
+  labs(title = "Distribution of electricity", x = "Value", y = "Density") +
+  theme_minimal()
+
+solar = ggplot(data_solar, aes(x = solar)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 2, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of solar", x = "Value", y = "Density") +
+  theme_minimal()
+
+grid.arrange(electricity, solar, ncol =1, nrow = 2)
+```
+
+
+```{r}
+#house
+
+#housing type
+housing_type = ggplot(data, aes(x = housing_unit)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Type of housing unit", x = "Type of housing unit", y = "Count")
+
+#year built range
+year_built = ggplot(data, aes(x = year_built)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Year built", x = "year range", y = "Count")
+
+#urbanization
+urbanization = ggplot(data, aes(x = urbanization)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Urbanization", x = "urbanization", y = "Count")
+
+#rooms
+rooms = ggplot(data = data, aes(x = rooms)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Rooms", x = "# of Rooms", y = "Count")
+
+grid.arrange(housing_type, year_built, urbanization, rooms, ncol =2, nrow = 2)
+```
+
+```{r}
+#household
+
+#income
+income = ggplot(data, aes(x = income)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1, size = 5)) +
+  labs(title = "Income catergory", x = "income", y = "Count")
+
+#education
+education = ggplot(data, aes(x = education)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Education level", x = "education", y = "Count")
+
+#gender
+gender = ggplot(data, aes(x = gender)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Gender", x = "Gender", y = "Count")
+
+#employment
+employment = ggplot(data, aes(x = employment)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Employment Stats", x = "Employment", y = "Count")
+
+#members
+members = ggplot(data = data, aes(x = total_members)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Total embers", x = "# of members", y = "Count")
+
+#age
+data_df <- data.frame(
+  Age = c(data$age_17, data$age_18to64, data$age_65),
+  Type = rep(c("up to 17", "18~64", "65+"), each = length(data$age_17))
+)
+
+age <- ggplot(data = data_df, aes(x = Type, y = Age, fill = Type)) +
+  geom_bar(stat = "identity", fill = "steelblue") + 
+  theme_minimal() +
+  labs(title = "Age Distribution", x = "Age Group", y = "Total Age")
+
+#heating
+heating = ggplot(data, aes(x = as.factor(heating))) + 
+  geom_bar(fill = "steelblue", color = "black") +
+  ggtitle("Heating") +
+  xlab("Heating") +
+  ylab("Count") +
+  scale_x_discrete(labels = c("0" = "No", "1" = "Yes")) + 
+  theme_minimal()
+
+assistance = ggplot(data, aes(x = as.factor(assistance))) + 
+  geom_bar(fill = "steelblue", color = "black") +
+  ggtitle("Assistance") +
+  xlab("Assistance") +
+  ylab("Count") +
+  scale_x_discrete(labels = c("0" = "No", "1" = "Yes")) +
+  theme_minimal()
+
+grid.arrange(income, members, age, employment, gender, education, heating, assistance, ncol = 4, nrow = 2)
+
+```
+
+```{r}
+#climate
+
+#climate
+climate = ggplot(data, aes(x = climate)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Climate Types", x = "Climate Type", y = "Count")
+
+#degree day
+data_df <- data.frame(
+  DegreeDays = c(data$heating_day, data$cooling_day),
+  Type = rep(c("HDD", "CDD"),each = length(data$heating_day))
+)
+
+degree_day = ggplot(data_df, aes(x = Type, y = DegreeDays, fill = Type)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Heating and Cooling Degree Days",
+       x = "Type",
+       y = "Degree Days") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+grid.arrange(climate, degree_day, ncol =2, nrow = 1)
+
+```
+
+```{r}
+#house cor-matrix
+
+house_data <- data[c("housing_unit", "rooms", "urbanization", "year_built", "total_electricity", "solar")]
+
+house_numeric <- house_data %>%
+  mutate(
+    housing_unit = as.numeric(housing_unit),
+    year_built = as.numeric(year_built),
+    solar = as.numeric(solar),
+    urbanization = as.numeric(urbanization)
+  )
+
+house_numeric_data <- house_numeric %>% select_if(is.numeric)
+house_corr <- cor(house_numeric_data, method = "spearman")  
+
+print(house_corr)
+
+corrplot(house_corr, method = "color", 
+         col = colorRampPalette(c("blue", "white", "red"))(200), addCoef.col = "black", number.cex = 0.4)
+```
+
+```{r}
+#household matrix
+
+household_data <- data[c("income", "total_members", "gender", "age_17", "age_18to64", "age_65", "employment", "education", "heating", "total_electricity", "solar")]
+
+household_data_numeric <- household_data %>%
+  mutate(
+    income = as.numeric(income),
+    education = as.numeric(education),
+    gender = as.numeric(gender),
+    employment = as.numeric(employment),
+    heating = as.numeric(heating),
+    solar = as.numeric(solar)
+  )
+
+household_numeric_data <- household_data_numeric %>% select_if(is.numeric)
+household_numeric_corr <- cor(household_numeric_data, method = "spearman") 
+
+print(household_numeric_corr)
+
+corrplot(household_numeric_corr, method = "color", 
+         col = colorRampPalette(c("blue", "white", "red"))(200), addCoef.col = "black", number.cex = 0.6)
+
+```
+
+```{r}
+#climate matrix 
+
+climate_data <- data[c("climate", "heating_day", "cooling_day", "total_electricity", "solar")]
+
+climate_data_numeric <- climate_data %>%
+  mutate(across(c(climate, solar), as.numeric))
+
+climate_numeric_corr <- cor(climate_data_numeric, method = "spearman")
+
+# Plot heatmap with smaller coefficients
+corrplot(climate_numeric_corr, method = "color", 
+         col = colorRampPalette(c("blue", "white", "red"))(200), 
+         addCoef.col = "black", number.cex = 0.6)
+```
+```{r}
+
+temp_data <- data[c("housing_unit", "rooms", "urbanization", "year_built", "income", "total_members", "gender", "age_17", "age_18to64", "age_65", "employment", "education", "heating", "climate", "heating_day", "cooling_day", "total_electricity", "solar")]
+
+data_numeric <- temp_data %>%
+  mutate(
+    income = as.numeric(income),
+    education = as.numeric(education),
+    gender = as.numeric(gender),
+    employment = as.numeric(employment),
+    heating = as.numeric(heating),
+    housing_unit = as.numeric(housing_unit),
+    year_built = as.numeric(year_built),
+    solar = as.numeric(solar),
+    urbanization = as.numeric(urbanization),
+    climate = as.numeric(climate)
+  )
+
+numeric_data <- data_numeric %>% select_if(is.numeric)
+numeric_corr <- cor(numeric_data, method = "spearman") 
+
+print(numeric_corr)
+
+corrplot(numeric_corr, method = "color", 
+         col = colorRampPalette(c("blue", "white", "red"))(200), addCoef.col = "black", number.cex = 0.4)
+
+```
+
+
+```{r}
+#question 1
+
+#house linear model
+linear_house <- lm(total_electricity ~ housing_unit + rooms + urbanization + year_built,
+             data = data)
+
+summary(linear_house)
+qqnorm(residuals(linear_house))
+qqline(residuals(linear_house), col = "red")#qqplot
+plot(fitted(linear_house), residuals(linear_house),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Residuals vs Fitted Values")
+abline(h = 0, col = "red")#residual plot
+
+
+linear_house_log <- lm(log(total_electricity) ~ housing_unit + rooms + urbanization + year_built, 
+                       data = data)
+summary(linear_house_log)
+
+qqnorm(residuals(linear_house_log))
+qqline(residuals(linear_house_log), col = "red")#qqplot
+plot(fitted(linear_house_log), residuals(linear_house_log),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Residuals vs Fitted Values")
+abline(h = 0, col = "red")#residual plot
+```
+
+
+```{r}
+#household linear model
+linear_household <- lm(total_electricity ~ income + total_members + gender + age_17  + age_18to64 + age_65 + employment + education + heating, 
+             data = data)
+
+alias(linear_household)
+
+linear_household2 <- lm(total_electricity ~ income + total_members + gender + age_17  + age_18to64 + employment + education + heating, 
+             data = data)
+
+summary(linear_household2)
+qqnorm(residuals(linear_household2))
+qqline(residuals(linear_household2), col = "red")
+plot(fitted(linear_household2), residuals(linear_household2),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Residuals vs Fitted Values")
+abline(h = 0, col = "red")
+
+linear_household_log <- lm(log(total_electricity) ~ income + total_members + gender + age_17  + age_18to64 + employment + education + heating, data = data)
+summary(linear_household_log)
+qqnorm(residuals(linear_household_log))
+qqline(residuals(linear_household_log), col = "red")
+plot(fitted(linear_household_log), residuals(linear_household_log),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Residuals vs Fitted Values")
+abline(h = 0, col = "red")
+```
+
+
+```{r}
+#climate linear model
+linear_climate <- lm(total_electricity ~ climate + heating_day + cooling_day,
+              data = data)
+
+summary(linear_climate)
+qqnorm(residuals(linear_climate))
+qqline(residuals(linear_climate), col = "red")
+plot(fitted(linear_climate), residuals(linear_climate),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Residuals vs Fitted Values")
+abline(h = 0, col = "red")
+
+linear_climate_log <- lm(log(total_electricity) ~ climate + heating_day + cooling_day,
+              data = data)
+summary(linear_climate_log)
+qqnorm(residuals(linear_climate_log))
+qqline(residuals(linear_climate_log), col = "red")
+plot(fitted(linear_climate_log), residuals(linear_climate_log),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Residuals vs Fitted Values")
+abline(h = 0, col = "red")
+```
+
+
+```{r}
+#combine linear model
+linear_all=lm(total_electricity~housing_unit + rooms + urbanization + year_built+income + total_members + gender + age_17  + age_18to64 + employment + education + heating+climate + heating_day + cooling_day, data=data)
+summary(linear_all)
+qqnorm(residuals(linear_all))
+qqline(residuals(linear_all), col = "red")
+plot(fitted(linear_all), residuals(linear_all),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Residuals vs Fitted Values")
+abline(h = 0, col = "red")
+
+linear_all_log=lm(log(total_electricity)~housing_unit + rooms + urbanization + year_built+income + total_members + gender + age_17  + age_18to64 + employment + education + heating+climate + heating_day + cooling_day, data=data)
+summary(linear_all_log)
+qqnorm(residuals(linear_all_log))
+qqline(residuals(linear_all_log), col = "red")
+plot(fitted(linear_all_log), residuals(linear_all_log),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Residuals vs Fitted Values")
+abline(h = 0, col = "red")
+```
+
+```{r}
+#question 2
+data_clean <- data[data$solar != -2, ]
+```
+
+
+```{r}
+#Question 2
+#house logistic regression model 
+data_house = data_clean
+
+model_house <- glm(solar ~ housing_unit + rooms + urbanization + year_built, 
+             data = data_house, 
+             family = binomial)
+
+alias(model_house)
+
+summary(model_house)
+
+vif_house <- vif(model_house)
+print(vif_house)
+
+ResourceSelection::hoslem.test(model_house$y, fitted(model_house))
+
+```
+
+
+```{r}
+#household logistic regression model 
+
+data_household = data_clean
+
+model_household <- glm(solar ~ income + total_members + gender + age_17  + age_18to64 + age_65 +  employment + education + heating + assistance, 
+             data = data_household, 
+             family = binomial)
+
+exp(coef(model_household))
+
+alias(model_household)
+
+model_household2 <- glm(solar ~ income + total_members + gender + age_17  + age_18to64 +  employment + education + heating + assistance, 
+             data = data_household, 
+             family = binomial)
+
+vif_household2 <- vif(model_household2)
+print(vif_household2)
+
+summary(model_household2)
+```
+
+
+```{r}
+#climate logistic regression model 
+data_climate = data_clean
+
+model_climate <- glm(solar ~ climate + heating_day + cooling_day,
+              data = data_climate, 
+             family = binomial)
+
+alias(model_climate)
+
+exp(coef(model_climate)) 
+summary(model_climate)
+
+vif_climate <- vif(model_climate)
+print(vif_climate)
+```
+
+```{r}
+#combine logistic regression model 
+data_all = data_clean
+
+model_all <- glm(solar ~ climate + heating_day + cooling_day + income + total_members + gender + age_17  + age_18to64 + age_65 +  employment + education + heating + assistance + housing_unit + rooms + urbanization + year_built,
+              data = data_all, 
+             family = binomial)
+
+alias(model_all)
+
+model_all1 <- glm(solar ~ climate + heating_day + cooling_day + income + total_members + gender + age_17  + age_18to64  +  employment + education + heating + assistance + housing_unit + rooms + urbanization + year_built,
+              data = data_all, 
+             family = binomial)
+
+model_all2 <- glm(solar ~ + heating_day + cooling_day + income + total_members + gender + age_17  + age_18to64  +  employment + education + heating + assistance + housing_unit + rooms + urbanization + year_built,
+              data = data_all, 
+             family = binomial)
+
+exp(coef(model_all2)) 
+summary(model_all2)
+
+vif_all <- vif(model_all2)
+print(vif_all)
+
+```
+
